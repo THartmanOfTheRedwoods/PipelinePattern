@@ -15,6 +15,7 @@ import stages.*;
 import java.util.ArrayList;
 import java.util.List;
 
+// TODO: Make a client that can dynamically build and execute pipelines and stages from a json file.
 public class PipelineExClient {
     public static void main(String[] args) {
         // Helper item list for ecomm.Order demo.
