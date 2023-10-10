@@ -18,7 +18,7 @@ import java.util.List;
 // TODO: Make a client that can dynamically build and execute pipelines and stages from a json file.
 public class PipelineExClient {
     public static void main(String[] args) {
-        // Helper item list for ecomm.Order demo.
+        // Helper item list for Order demo.
         List<Item> items = new ArrayList<>();
         items.add(new Item("10 foot chain-link fence", 3));
         items.add(new Item("10 foot chain-link gate", 1));
@@ -60,10 +60,9 @@ public class PipelineExClient {
 
         // Example 4
         // Adding a Builder Pattern lets you conditionally add Stages
-        boolean addTwo = true;
         PipelineBuilderInterface pb = new PipelineBuilder();
         pb = pb.add(new TimesTwoStage()).add(new AddOneStage());
-        if(addTwo) { // Conditionally added stage.
+        if(true) { // Conditionally added stage.
             pb.add(new TimesTwoStage());
         }
         PipelineInterface pipeline = pb.build(new FingersCrossedProcessor());
