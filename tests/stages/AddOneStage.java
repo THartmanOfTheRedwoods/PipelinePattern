@@ -1,6 +1,7 @@
-package pipes.stages;
+package stages;
 
 import pipes.payloads.Payload;
+import pipes.stages.StageInterface;
 
 public class AddOneStage implements StageInterface {
     @Override

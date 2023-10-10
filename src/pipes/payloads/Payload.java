@@ -1,7 +1,5 @@
 package pipes.payloads;
 
-import java.lang.reflect.Type;
-
 public class Payload {
     private Object result = null;
 
