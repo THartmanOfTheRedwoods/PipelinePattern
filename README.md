@@ -1,6 +1,6 @@
 # The Pipeline Design Pattern
 
-[Design Pattern Notes](http://localhost:8000/CIS-18/week_08.html)
+[Design Pattern Notes](https://thartmanoftheredwoods.github.io/CIS-18/week_08.html)
 
 ## Example Pipeline Usages
 
