@@ -1,13 +1,10 @@
 package stages;
 
-import pipes.payloads.Payload;
 import pipes.stages.StageInterface;
 
-public class AddOneStage implements StageInterface {
+public class AddOneStage implements StageInterface<Integer> {
     @Override
-    public Payload apply(Payload payload) {
-        int v = payload.getResult(Integer.class);
-        payload.setResult(Integer.class, v + 1);
-        return payload;
+    public Integer apply(Integer payload) {
+        return payload + 1;
     }
 }

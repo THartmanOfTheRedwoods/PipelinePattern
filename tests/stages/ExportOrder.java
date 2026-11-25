@@ -1,19 +1,14 @@
 package stages;
 
-// Imports for E-Comm Demo
 import ecomm.Order;
-// Imports necessary for a Stage
-import pipes.payloads.Payload;
 import pipes.stages.StageInterface;
 
-public class ExportOrder implements StageInterface {
+public class ExportOrder implements StageInterface<Order> {
 
     @Override
-    public Payload apply(Payload payload) {
-        System.out.printf("Stage %s: Transmitting ecomm.Order data from payload to Drop-Ship Vendor.%n", ExportOrder.class.getName());
-        Order order = payload.getResult(Order.class);
+    public Order apply(Order order) {
+        System.out.printf("Stage %s: Transmitting Order %d to the Drop-Ship Vendor.%n", ExportOrder.class.getName(), order.getOrderId());
         // Transmit order code here
-        payload.setResult(Order.class, order);
-        return payload;
+        return order;
     }
 }

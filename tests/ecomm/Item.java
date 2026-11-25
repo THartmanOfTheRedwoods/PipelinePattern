@@ -23,8 +23,6 @@ public class Item {
 
     @Override
     public String toString() {
-        return String.format("""
-                Item: %s, Quantity: %d
-                """, this.name, this.quantity);
+        return String.format("Item: %s, Quantity: %d", this.name, this.quantity);
     }
 }

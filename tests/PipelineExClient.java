@@ -3,12 +3,11 @@ import ecomm.Item;
 import ecomm.Order;
 // Imports from Design Pattern
 import pipes.Pipeline;
-import pipes.payloads.Payload;
 import pipes.PipelineInterface;
-import pipes.builder.PipelineBuilderInterface;
 import pipes.builder.PipelineBuilder;
+import pipes.builder.PipelineBuilderInterface;
+import pipes.processors.InterruptibleProcessor;
 import pipes.stages.exceptions.StageException;
-import pipes.processors.FingersCrossedProcessor;
 // Import custom stages used in this example client.
 import stages.*;
 // Import utility data-structures
@@ -28,61 +27,86 @@ public class PipelineExClient {
         // BETTER READABILITY: No long or nested if-else structures    //
         // BETTER TESTABILITY: Stages are easily duplicated and mocked //
         // SINGLE RESPONSIBILITY: One Stage, One job                   //
-        Payload order = new Payload(Order.class, new Order(1001, items));
-        PipelineInterface pipeline1 = new Pipeline()
+        PipelineInterface<Order> pipeline1 = new Pipeline<Order>()
                 .pipe(new CreateOrder())
                 .pipe(new ProcessPayment())
                 .pipe(new SendInvoice())
                 .pipe(new ExportOrder());
-        pipeline1.process(order);
-        System.out.printf("----------------%n%s%n", order.getResult(Order.class));
+        Order order = pipeline1.process(new Order(1001, items));
+        System.out.printf("----------------%n%s%n", order);
 
         // Example 2:
         // Do a little Math
         // Re-order-ability becomes easy-peasy.
-        int result = new Pipeline()
+        int result = new Pipeline<Integer>()
                 .pipe(new AddOneStage())
                 .pipe(new TimesTwoStage())
-                .process(new Payload(Integer.class, 32)).getResult(Integer.class);
-        System.out.printf("%n----------------%nResult %d%n%n", result);
+                .process(32);
+        System.out.printf("----------------%nResult %d%n%n", result);
 
         // Example 3:
-        // Short Circuit the processing
+        // Short Circuit the processing by throwing an exception from a stage.
         items.add(new Item("Juvenile female pet panda", 1)); // Adding an item for demonstration purposes.
-        order = new Payload(Order.class, new Order(1002, items));
+        order = new Order(1002, items);
         try {
             pipeline1.process(order);
-        } catch(StageException se) {
-                System.out.println(se.getMessage());
+        } catch (StageException se) {
+            System.out.println(se.getMessage());
         } finally {
-            System.out.printf("----------------%n%s%n", order.getResult(Order.class));
+            System.out.printf("----------------%n%s%n", order);
         }
 
         // Example 4
         // Adding a Builder Pattern lets you conditionally add Stages
-        PipelineBuilderInterface pb = new PipelineBuilder();
-        pb = pb.add(new TimesTwoStage()).add(new AddOneStage());
-        if(true) { // Conditionally added stage.
-            pb.add(new TimesTwoStage());
+        order = new Order(1003, items, "New Zealand");
+        PipelineBuilderInterface<Order> builder = new PipelineBuilder<Order>()
+                .add(new CreateOrder());
+        if (order.getOrigin().equals("New Zealand")) { // Conditionally added stage.
+            builder.add(new PreBookCarrier());
         }
-        PipelineInterface pipeline = pb.build(new FingersCrossedProcessor());
-        Payload p = new Payload(Integer.class, 32);
-        pipeline.process(p);
-
-        System.out.printf("%n----------------%nResult %d%n%n", p.getResult(Integer.class));
+        builder.add(new ProcessPayment())
+               .add(new SendInvoice())
+               .add(new ExportOrder());
+        PipelineInterface<Order> pipeline = builder.build(); // Uses the default FingersCrossedProcessor
+        order = pipeline.process(order);
+        System.out.printf("----------------%n%s%n", order);
 
         // Example 5
-        // Pipe Re-Use
-        order = new Payload(Order.class, new Order(1003, items));
-        PipelineInterface pipeline2 = new Pipeline()
+        // Pipe Re-Use: a pipeline is a stage, so it can be piped into another pipeline.
+        PipelineInterface<Order> pipeline2 = new Pipeline<Order>()
                 .pipe(new CreateOrder())
                 .pipe(new GenerateInvoice());
-        PipelineInterface pipeline3 = new Pipeline()
+        PipelineInterface<Order> pipeline3 = new Pipeline<Order>()
                 .pipe(pipeline2)  // Pipeline Re-Use ;-)
                 .pipe(new ProcessPayment())
                 .pipe(new SendInvoice())
                 .pipe(new ExportOrder());
-        pipeline3.process(order);
-        System.out.printf("----------------%n%s%n", order.getResult(Order.class));
+        order = pipeline3.process(new Order(1004, items));
+        System.out.printf("----------------%n%s%n", order);
+
+        // Example 6
+        // Stages don't have to be classes: lambdas and method references work too.
+        String greeting = new Pipeline<String>()
+                .pipe(String::trim)
+                .pipe(s -> s.replace("php", "Java"))
+                .pipe(String::toUpperCase)
+                .process("   hello php pipelines   ");
+        System.out.printf("----------------%nResult %s%n%n", greeting);
+
+        // Example 7
+        // Short Circuit without exceptions: the InterruptibleProcessor stops as soon as its check fails.
+        int interrupted = new Pipeline<Integer>(new InterruptibleProcessor<>(p -> p < 100))
+                .pipe(new TimesTwoStage())  // 64  -> keep going
+                .pipe(new TimesTwoStage())  // 128 -> check fails, stop here
+                .pipe(new AddOneStage())    // never runs
+                .process(32);
+        System.out.printf("----------------%nResult %d%n%n", interrupted);
+
+        // Example 8
+        // Pipelines are immutable: pipe() returns a NEW pipeline and leaves the original untouched.
+        PipelineInterface<Integer> timesTwo = new Pipeline<Integer>().pipe(new TimesTwoStage());
+        PipelineInterface<Integer> timesTwoPlusOne = timesTwo.pipe(new AddOneStage());
+        System.out.printf("----------------%ntimesTwo(10) = %d, timesTwoPlusOne(10) = %d%n",
+                timesTwo.process(10), timesTwoPlusOne.process(10));
     }
 }

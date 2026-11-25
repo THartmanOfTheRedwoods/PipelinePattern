@@ -11,13 +11,13 @@ Think of the ‘Pipeline Pattern’ like a conveyor belt or assembly line that t
 - The order is packed and shipped
 - Customer receives a thank-you email.
 
-While this may be more useful with some kind of state-machine, this clearly shows the concept of a pipe. There is one primary constant in all of these steps — the order. This order Array/Class/Object/TransferObject etc is passed to each phase of the process until completed.
+While this may be more useful with some kind of state-machine, this clearly shows the concept of a pipe. There is one primary constant in all of these steps — the order. This order Class/Object/Record/TransferObject etc is passed to each phase of the process until completed.
 
-If you’ve created something similar in the past, it’s a pretty good bet that there’s something ugly like this going on in a file called `Order.php`.
+If you’ve created something similar in the past, it’s a pretty good bet that there’s something ugly like this going on in a file called `OrderService.java`.
 
-```php
-if ($order->getStatus() === 'success') {
-    $this->getErpAdapter()->sendOrder($order);
+```java
+if (order.getStatus().equals("success")) {
+    this.getErpAdapter().sendOrder(order);
 }
 ```
 
@@ -29,14 +29,14 @@ Here’s one of my favourite quotes from Martin Fowler.
 
 Now, consider this.
 
-```php
-$pipeline = (new Pipeline)
-    ->pipe(new createOrder)
-    ->pipe(new processPayment)
-    ->pipe(new sendInvoice)
-    ->pipe(new exportOrder);
+```java
+PipelineInterface<Order> pipeline = new Pipeline<Order>()
+        .pipe(new CreateOrder())
+        .pipe(new ProcessPayment())
+        .pipe(new SendInvoice())
+        .pipe(new ExportOrder());
 
-$pipeline->process($order);
+pipeline.process(order);
 ```
 
 Can someone say ‘readability’, please? This is also a huge win for testability and single responsibility — what this means is that each piece of code only does one or two things that it was designed to do, then passes the torch to the next class. To make testing easier, each of these stages can be easily mocked — or even the whole pipeline!
@@ -49,17 +49,56 @@ If you’re still not sure about the definition, here’s a better description f
 
 ## Implementation in Java
 
-Since I’m a PHP developer (well, mostly!), I’m doing my examples in that — BUT, you can easily apply this pattern to any language. There are plenty of libraries out there that implement this pattern, but my favourite is **PHP League Pipeline**. It’s super simple and FAST — go and check out their site. If you’re not already a fan of the PHP League, please go and check it out immediately, their packages are first rate. Their packages are rock-solid, backed by incredible code coverage/testing and have awesome documentation. See that? Builds passing, code quality and coverage.. it’s that good.
+I first fell in love with this pattern in PHP, and you can easily apply it to any language. There are plenty of libraries out there that implement it, but my favourite has always been **PHP League Pipeline**. It’s super simple and FAST. If you’re not already a fan of the PHP League, please go and check it out immediately: their packages are rock-solid, backed by incredible code coverage/testing and have awesome documentation.
 
 From the authors:
 
 > “This package provides a plug and play implementation of the Pipeline Pattern. It’s an architectural pattern which encapsulates sequential processes. When used, it allows you to mix and match operation, and pipelines, to create new execution chains. The pipeline pattern is often compared to a production line, where each stage performs a certain operation on a given payload/subject. Stages can act on, manipulate, decorate, or even replace the payload. If you find yourself passing results from one function to another to complete a series of tasks on a given subject, you might want to convert it into a pipeline.”
 
+I wanted exactly that in Java, so I wrote **PipelinePattern**, a Java port that mirrors League Pipeline’s API piece for piece, and adds the one thing PHP can’t give you: compile-time type safety through generics. If you know one library, you know the other.
+
+| League\Pipeline (PHP)                         | PipelinePattern (Java)                                         |
+|-----------------------------------------------|----------------------------------------------------------------|
+| `StageInterface::__invoke($payload)`          | `StageInterface<T>.apply(T payload)`                           |
+| any `callable` is a stage                     | any `Function<? super T, ? extends T>` (class, lambda, method reference, pipeline) is a stage |
+| `(new Pipeline)->pipe($stage)`                | `new Pipeline<T>().pipe(stage)`                                |
+| `new Pipeline($processor, ...$stages)`        | `new Pipeline<T>(processor, stages...)`                        |
+| `$pipeline->process($payload)` / `$pipeline($payload)` | `pipeline.process(payload)` / `pipeline.apply(payload)` |
+| `(new PipelineBuilder)->add($stage)->build()` | `new PipelineBuilder<T>().add(stage).build()`                  |
+| `FingersCrossedProcessor` (default)           | `FingersCrossedProcessor<T>` (default)                         |
+| `InterruptibleProcessor($check)`              | `InterruptibleProcessor<T>(Predicate<? super T> check)`        |
+
+Just like the League version, pipelines are **immutable** (every `pipe` returns a new pipeline), a `null` processor means “use the default `FingersCrossedProcessor`”, and the library never catches or silences your exceptions.
+
 So.. how do we use it?
 
 ### Maven install
 
-To use the Java replacement library (`PipelinePattern`), you would typically add it as a dependency from its source repository. The library is available at [https://github.com/THartmanOfTheRedwoods/PipelinePattern](https://github.com/THartmanOfTheRedwoods/PipelinePattern). You can clone the repository or add it as a module in your project.
+The library lives at [https://github.com/THartmanOfTheRedwoods/PipelinePattern](https://github.com/THartmanOfTheRedwoods/PipelinePattern) and needs Java 17 or newer. Clone it and install it into your local Maven repository:
+
+```bash
+git clone https://github.com/THartmanOfTheRedwoods/PipelinePattern.git
+```
+
+```bash
+cd PipelinePattern
+```
+
+```bash
+mvn install
+```
+
+Then add the dependency to your project’s `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>io.github.thartmanoftheredwoods</groupId>
+    <artifactId>pipeline-pattern</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+Not using Maven? The library has zero dependencies, so you can also just copy the `src/pipes` folder into your project.
 
 Great.. we’re ready to go!
 
@@ -70,97 +109,74 @@ We’re going to need a few pieces, so let me first show you how it all goes tog
 ```java
 import pipes.Pipeline;
 import pipes.PipelineInterface;
-import pipes.payloads.Payload;
 
 public class RunAllTheThings {
     public Payload doIt() {
-        PipelineInterface pipeline = new Pipeline()
+        PipelineInterface<Payload> pipeline = new Pipeline<Payload>()
                 .pipe(new DoStage1())
                 .pipe(new DoStage2())
                 .pipe(new DoStage3());
 
         // The payload is an object that's passed between stages
-        Payload payload = new Payload(String.class, "");
+        Payload payload = new Payload();
 
-        // Run the pipeline
-        pipeline.process(payload);
-
-        return payload;
+        // Run the pipeline and return the result
+        return pipeline.process(payload);
     }
 }
 ```
 
-Simple, eh? Let’s have a look at some of the sub classes.
+Simple, eh? The `<Payload>` type argument tells the compiler what flows through the pipe, so every stage is checked to accept and return a `Payload`. Let’s have a look at some of the sub classes.
 
 ### Payload
 
-The payload is something I really like to add in here as it keeps the data being passed though the pipe clean and readable. In this example, payload is just a simple entity with a protected property and some getters and setters. It gives us a clean way to not only update the results, but an expected format at the end. Because the `doIt` method returns this object, we know that we can do something like `result.getResult(String.class)` to get what we need. This payload can be as simple of as complex as you need.
+The payload is something I really like to add in here as it keeps the data being passed though the pipe clean and readable. In this example, payload is just a simple entity with a private property and some getters and setters. It gives us a clean way to not only update the results, but an expected format at the end. Because the `doIt` method returns this object, we know that we can do something like `result.getResult()` to get what we need. This payload can be as simple or as complex as you need.
 
-The `PipelinePattern` library provides a generic `Payload` class that wraps a result and ensures type safety.
+The library itself doesn’t care what your payload is — a `Pipeline<T>` works with any type `T`: a `String`, an `Integer`, a record, your `Order` entity... This is ours:
 
 ```java
-package pipes.payloads;
-
 public class Payload {
-    private Object result = null;
+    private String result = "";
 
-    public <T> Payload(Class<T> desiredType, Object result) {
-        this.setResult(desiredType, result);
+    public String getResult() {
+        return result;
     }
 
-    public <T> T getResult(Class<T> desiredType) {
-        if (this.result.getClass().isAssignableFrom(desiredType)) {
-            return desiredType.cast(this.result);
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    public <T> void setResult(Class<T> desiredType, Object result) {
-        if (result.getClass().isAssignableFrom(desiredType)) {
-            this.result = desiredType.cast(result);
-        } else {
-            throw new IllegalArgumentException();
-        }
+    public void setResult(String result) {
+        this.result = result;
     }
 }
 ```
 
 ### Stage 1
 
-Stages need to be **callable** — this means that they need to either be a closure, a callback or have an `__invoke` method. In Java with the `PipelinePattern` library, stages implement the `StageInterface`, which requires an `apply(Payload)` method. We’re going to use that for this example.
+In PHP, stages need to be **callable** — a closure, a callback or a class with an `__invoke` method. The Java equivalent is anything that behaves like a `Function<T, T>`: a class that implements `StageInterface<T>` (whose single method is `apply`), a lambda, a method reference, or even another pipeline. We’re going to use class based stages for this example.
 
 ```java
-import pipes.payloads.Payload;
 import pipes.stages.StageInterface;
-import pipes.stages.exceptions.StageException;
 
-public class DoStage1 implements StageInterface {
+public class DoStage1 implements StageInterface<Payload> {
     @Override
-    public Payload apply(Payload payload) throws StageException {
-        String current = payload.getResult(String.class);
-        payload.setResult(String.class, current + "all");
+    public Payload apply(Payload payload) {
+        payload.setResult(payload.getResult() + "all");
         return payload;
     }
 }
 ```
 
-In this stage, we’re adding the word `all` to the result string. Once we’ve modified the result, you simply return the payload and the next stage will run.
+In this stage, we’re adding the word `all` to the result string. Once we’ve modified the result, you simply return the payload and the next stage will run. A stage can also return a completely different object of the same type — whatever it returns is what the next stage receives.
 
 ### Stage 2
 
 You may start to see the pattern emerging here. This stage takes the payload, adds the word `the` and continues.
 
 ```java
-import pipes.payloads.Payload;
 import pipes.stages.StageInterface;
-import pipes.stages.exceptions.StageException;
 
-public class DoStage2 implements StageInterface {
+public class DoStage2 implements StageInterface<Payload> {
     @Override
-    public Payload apply(Payload payload) throws StageException {
-        String current = payload.getResult(String.class);
-        payload.setResult(String.class, current + "the");
+    public Payload apply(Payload payload) {
+        payload.setResult(payload.getResult() + "the");
         return payload;
     }
 }
@@ -171,15 +187,12 @@ public class DoStage2 implements StageInterface {
 Guess what this stage does? Yep, we add the word `things` to the result.
 
 ```java
-import pipes.payloads.Payload;
 import pipes.stages.StageInterface;
-import pipes.stages.exceptions.StageException;
 
-public class DoStage3 implements StageInterface {
+public class DoStage3 implements StageInterface<Payload> {
     @Override
-    public Payload apply(Payload payload) throws StageException {
-        String current = payload.getResult(String.class);
-        payload.setResult(String.class, current + "things");
+    public Payload apply(Payload payload) {
+        payload.setResult(payload.getResult() + "things");
         return payload;
     }
 }
@@ -192,41 +205,110 @@ Right, so let’s run our code.
 ```java
 RunAllTheThings runner = new RunAllTheThings();
 Payload result = runner.doIt();
-System.out.println(result.getResult(String.class));
+System.out.println(result.getResult());
 ```
 
 This will print the following string to the screen.
 
-```
+```text
 allthethings
 ```
 
+### Lambdas and method references
+
+Because `StageInterface` is a functional interface, you don’t have to write a class for every little step. Lambdas and method references are stages too, and you can mix them freely with class based stages.
+
+```java
+PipelineInterface<Payload> pipeline = new Pipeline<Payload>()
+        .pipe(new DoStage1())
+        .pipe(payload -> {
+            payload.setResult(payload.getResult() + "the");
+            return payload;
+        })
+        .pipe(new DoStage3());
+```
+
+And if your payload is a simple value, the whole thing becomes a one-liner per stage:
+
+```java
+String result = new Pipeline<String>()
+        .pipe(s -> s + "all")
+        .pipe(s -> s + "the")
+        .pipe(s -> s + "things")
+        .pipe(String::toUpperCase)
+        .process("");
+```
+
+That gives you `ALLTHETHINGS`.
+
+## Immutability
+
+Pipelines are immutable stage chains. When you `pipe` a new stage, a **new** pipeline is created with the added stage, and the original is left untouched. This makes pipelines easy to share and reuse, and minimizes side-effects.
+
+```java
+PipelineInterface<Integer> timesTwo = new Pipeline<Integer>()
+        .pipe(p -> p * 2);
+PipelineInterface<Integer> timesTwoPlusOne = timesTwo
+        .pipe(p -> p + 1);
+
+timesTwo.process(10);        // 20 - the original pipeline is unchanged
+timesTwoPlusOne.process(10); // 21
+```
+
+One thing to watch out for: because `pipe` returns a new pipeline, calling `pipeline.pipe(stage);` on its own line and ignoring the result does nothing. Always chain the calls or keep the returned pipeline. If you need to add stages one at a time, that’s exactly what the `PipelineBuilder` below is for.
+
 ## Short-circuiting
 
-Sometimes you simply don’t want to continue processing. If an order is invalid why would you attempt to capture payment? How do we tackle that? The simplest way is with a try/catch. Now just throw a `StageException` in one of your stages.
+Sometimes you simply don’t want to continue processing. If an order is invalid why would you attempt to capture payment? How do we tackle that? The simplest way is with a try/catch. Like League Pipeline, this library is completely transparent with exceptions: it never catches or silences them. So just throw an exception from one of your stages — the library ships with an unchecked `StageException` for exactly this purpose.
+
+```java
+import ecomm.Order;
+import pipes.stages.StageInterface;
+import pipes.stages.exceptions.StageException;
+
+public class ProcessPayment implements StageInterface<Order> {
+
+    @Override
+    public Order apply(Order order) {
+        System.out.printf("Stage %s: Processing payment for Order %d.%n", ProcessPayment.class.getName(), order.getOrderId());
+        // Used to demo short-circuiting a pipeline.
+        if (order.getOrderId() == 1002) {
+            throw new StageException("Failed to process payment for Order " + order.getOrderId() + ".");
+        }
+        order.setPaid(true);
+        return order;
+    }
+}
+```
+
+Then deal with it at the time the pipeline processes the payload.
 
 ```java
 try {
-    pipeline.process(payload);
+    pipeline.process(order);
 } catch (StageException e) {
     // Do something else!
 }
 ```
 
-The `PipelinePattern` library defines `StageException`, which stages can throw to interrupt the pipeline.
+If stopping early is part of the normal flow rather than an error, you can swap in the `InterruptibleProcessor` instead. It checks the payload after every stage and stops as soon as the check returns `false`, without throwing anything.
+
+```java
+PipelineInterface<Integer> pipeline = new Pipeline<Integer>(new InterruptibleProcessor<>(p -> p < 100))
+        .pipe(p -> p * 2)
+        .pipe(p -> p * 2)
+        .pipe(p -> p + 1);
+
+pipeline.process(32); // 128: the check fails after the second stage, so the third never runs
+```
 
 ## Dynamic Pipelines
 
-There’s another useful aspect of the `PipelinePattern` library that I love, which is the `PipelineBuilder` — This allows you to add logic as to whether to add a stage to the pipeline.
+There’s another useful aspect of the library that I love, and it’s where the Builder Pattern comes in as a supporting pattern: the `PipelineBuilder`. Because pipelines themselves are immutable, the builder collects stages one at a time and lets you add logic as to whether to add a stage to the pipeline. When you’re ready, `build()` assembles the pipeline.
 
 ```java
-import pipes.builder.PipelineBuilder;
-import pipes.builder.PipelineBuilderInterface;
-import pipes.PipelineInterface;
-import pipes.processors.FingersCrossedProcessor;
-
 // Instantiate the PipelineBuilder
-PipelineBuilderInterface builder = new PipelineBuilder()
+PipelineBuilderInterface<Order> builder = new PipelineBuilder<Order>()
         .add(new CreateOrder());
 
 // Conditional stage
@@ -239,25 +321,25 @@ builder.add(new ProcessPayment())
        .add(new SendInvoice())
        .add(new ExportOrder());
 
-// Assemble to pipeline
-PipelineInterface pipeline = builder.build(new FingersCrossedProcessor());
+// Assemble the pipeline
+PipelineInterface<Order> pipeline = builder.build();
 
 // Process
 pipeline.process(order);
 ```
 
-The `PipelineBuilder` accumulates stages and then builds a `Pipeline` with a chosen processor.
+`build()` uses the default `FingersCrossedProcessor`; pass a processor, e.g. `builder.build(new InterruptibleProcessor<>(Order::isProcessed))`, to change how the stages run. Every call to `build` takes a snapshot of the stages added so far, so adding more stages to the builder later never changes a pipeline you have already built.
 
 ## Reusing Pipes
 
-It may be useful sometimes to reuse a pipe inside another pipe! Easy enough since the `pipe` method can accept another `StageInterface`, and `Pipeline` itself implements `StageInterface`.
+It may be useful sometimes to reuse a pipe inside another pipe! Easy enough: `PipelineInterface<T>` extends `StageInterface<T>`, so a pipeline *is* a stage and can be passed straight to `pipe`.
 
 ```java
-PipelineInterface createOrderPipe = new Pipeline()
+PipelineInterface<Order> createOrderPipe = new Pipeline<Order>()
         .pipe(new CreateOrder())
         .pipe(new GenerateInvoice());
 
-PipelineInterface mainPipeline = new Pipeline()
+PipelineInterface<Order> mainPipeline = new Pipeline<Order>()
         .pipe(createOrderPipe) // Pipe re-use!
         .pipe(new ProcessPayment())
         .pipe(new SendInvoice())
@@ -265,6 +347,18 @@ PipelineInterface mainPipeline = new Pipeline()
 
 mainPipeline.process(order);
 ```
+
+## Where everything lives
+
+| Class                                                  | Package                     |
+|--------------------------------------------------------|-----------------------------|
+| `Pipeline`, `PipelineInterface`                        | `pipes`                     |
+| `StageInterface`                                       | `pipes.stages`              |
+| `StageException`                                       | `pipes.stages.exceptions`   |
+| `PipelineBuilder`, `PipelineBuilderInterface`          | `pipes.builder`             |
+| `FingersCrossedProcessor`, `InterruptibleProcessor`, `ProcessorInterface` | `pipes.processors` |
+
+The complete `Order` entity and e-commerce stages (`CreateOrder`, `ProcessPayment`, `GenerateInvoice`, `SendInvoice`, `ExportOrder`, `PreBookCarrier`) used in this article are in the repository’s `tests/ecomm` and `tests/stages` folders, and every code example in this article is compiled and run by the project’s test suite.
 
 ## Conclusion
 
